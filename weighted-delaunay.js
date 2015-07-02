@@ -2,11 +2,13 @@
 
 var ch = require('full-convex-hull')
 
+module.exports = weightedDelaunay
+
 function weightedDelaunay(points, weights, useInfinity) {
   if(points.length === 0) {
     return []
   }
-  var d = points[0].length]
+  var d = points[0].length
   var lifted = new Array(points.length+1)
   for(var i=0; i<points.length; ++i) {
     var p = points[i]
@@ -22,7 +24,7 @@ function weightedDelaunay(points, weights, useInfinity) {
     pointAtInfinity[i] = 0
   }
   pointAtInfinity[d] = 1e32
-  lifted.push(pointAtInfinity)
+  lifted[points.length] = pointAtInfinity
   var cells = ch(lifted)
   if(useInfinity) {
     for(var i=0; i<cells.length; ++i) {
