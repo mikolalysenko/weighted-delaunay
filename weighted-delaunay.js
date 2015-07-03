@@ -13,10 +13,12 @@ function weightedDelaunay(points, weights, useInfinity) {
   for(var i=0; i<points.length; ++i) {
     var p = points[i]
     var lift = new Array(d+1)
+    var w = 0.0
     for(var j=0; j<p.length; ++j) {
       lift[j] = p[j]
+      w += Math.pow(p[j], 2)
     }
-    lift[p.length] = weights[i]
+    lift[p.length] = w - weights[i]
     lifted[i] = lift
   }
   var pointAtInfinity = new Array(d+1)
