@@ -1,0 +1,36 @@
+{
+  "name": "weighted-delaunay",
+  "version": "1.0.0",
+  "description": "Weighted Delaunay triangulation in any dimension",
+  "main": "weighted-delaunay.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "dependencies": {
+    "convex-hull": "^1.0.3"
+  },
+  "devDependencies": {
+    "canvas-fit": "^1.4.0",
+    "mouse-change": "^1.2.1",
+    "right-now": "^1.0.0",
+    "tape": "^4.0.0"
+  },
+  "scripts": {
+    "test": "tape test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mikolalysenko/weighted-delaunay.git"
+  },
+  "keywords": [
+    "tape",
+    "test/*.js"
+  ],
+  "author": "Mikola Lysenko",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mikolalysenko/weighted/issues"
+  },
+  "homepage": "https://github.com/mikolalysenko/weighted-delaunay"
+}
