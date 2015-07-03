@@ -1,6 +1,6 @@
 'use strict'
 
-var ch = require('full-convex-hull')
+var ch = require('convex-hull')
 
 module.exports = weightedDelaunay
 
@@ -18,7 +18,7 @@ function weightedDelaunay(points, weights, useInfinity) {
       lift[j] = p[j]
       w += Math.pow(p[j], 2)
     }
-    lift[p.length] = w - weights[i]
+    lift[p.length] = w - weights[i] * weights[i]
     lifted[i] = lift
   }
   var pointAtInfinity = new Array(d+1)
