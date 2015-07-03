@@ -85,104 +85,192 @@ function parse(prop) {
 }
 
 },{}],3:[function(require,module,exports){
+"use strict"
+
+var convexHull1d = require('./lib/ch1d')
+var convexHull2d = require('./lib/ch2d')
+var convexHullnd = require('./lib/chnd')
+
+module.exports = convexHull
+
+function convexHull(points) {
+  var n = points.length
+  if(n === 0) {
+    return []
+  } else if(n === 1) {
+    return [[0]]
+  }
+  var d = points[0].length
+  if(d === 0) {
+    return []
+  } else if(d === 1) {
+    return convexHull1d(points)
+  } else if(d === 2) {
+    return convexHull2d(points)
+  }
+  return convexHullnd(points, d)
+}
+},{"./lib/ch1d":4,"./lib/ch2d":5,"./lib/chnd":6}],4:[function(require,module,exports){
+"use strict"
+
+module.exports = convexHull1d
+
+function convexHull1d(points) {
+  var lo = 0
+  var hi = 0
+  for(var i=1; i<points.length; ++i) {
+    if(points[i][0] < points[lo][0]) {
+      lo = i
+    }
+    if(points[i][0] > points[hi][0]) {
+      hi = i
+    }
+  }
+  if(lo < hi) {
+    return [[lo], [hi]]
+  } else if(lo > hi) {
+    return [[hi], [lo]]
+  } else {
+    return [[lo]]
+  }
+}
+},{}],5:[function(require,module,exports){
 'use strict'
 
-module.exports = fullHull
+module.exports = convexHull2D
 
-var convexHull = require('convex-hull')
-var affineHull = require('affine-hull')
-var affineComplement = require('affine-complement')
-var sc = require('simplicial-complex')
+var monotoneHull = require('monotone-convex-hull-2d')
 
-function fullHull(pts) {
-  if(pts.length === 0) {
+function convexHull2D(points) {
+  var hull = monotoneHull(points)
+  var h = hull.length
+  if(h <= 2) {
     return []
   }
-  var hull = convexHull(pts)
-  if(hull.length > 0) {
-    return hull
+  var edges = new Array(h)
+  var a = hull[h-1]
+  for(var i=0; i<h; ++i) {
+    var b = hull[i]
+    edges[i] = [a,b]
+    a = b
   }
+  return edges
+}
 
-  //Degenerate hull, add extra points to cover gap
-  var d     = pts[0].length
-  var aff   = affineHull(pts)
-  var dim   = aff.length
-  var basis = new Array(dim)
-  for(var i=0; i<dim; ++i) {
-    basis[i] = pts[i]
+},{"monotone-convex-hull-2d":24}],6:[function(require,module,exports){
+'use strict'
+
+module.exports = convexHullnD
+
+var ich = require('incremental-convex-hull')
+var aff = require('affine-hull')
+
+function permute(points, front) {
+  var n = points.length
+  var npoints = new Array(n)
+  for(var i=0; i<front.length; ++i) {
+    npoints[i] = points[front[i]]
   }
-  var co   = affineComplement(d, basis)
-  if(!co) {
-    return []
+  var ptr = front.length
+  for(var i=0; i<n; ++i) {
+    if(front.indexOf(i) < 0) {
+      npoints[ptr++] = points[i]
+    }
   }
-  var cod  = co.length
-  var eop  = pts.length
-  var npts = co.concat(pts)
+  return npoints
+}
 
-  //Re-run convex hull
-  hull = convexHull(npts)
-
-  //Filter out faces
-  var filtered = []
-  for(var i=0, h=hull.length; i<h; ++i) {
-    var f = hull[i]
-    var c = []
-    for(var j=0; j<f.length; ++j) {
-      var v = f[j]
-      if(v >= cod) {
-        c.push(v - cod)
+function invPermute(cells, front) {
+  var nc = cells.length
+  var nf = front.length
+  for(var i=0; i<nc; ++i) {
+    var c = cells[i]
+    for(var j=0; j<c.length; ++j) {
+      var x = c[j]
+      if(x < nf) {
+        c[j] = front[x]
+      } else {
+        x = x - nf
+        for(var k=0; k<nf; ++k) {
+          if(x >= front[k]) {
+            x += 1
+          }
+        }
+        c[j] = x
       }
     }
-    if(c.length === dim) {
-      filtered.push(c)
-    }
   }
-  return sc.unique(sc.normalize(filtered))
+  return cells
 }
-},{"affine-complement":4,"affine-hull":11,"convex-hull":18,"simplicial-complex":38}],4:[function(require,module,exports){
+
+function convexHullnD(points, d) {
+  try {
+    return ich(points, true)
+  } catch(e) {
+    //If point set is degenerate, try to find a basis and rerun it
+    var ah = aff(points)
+    if(ah.length <= d) {
+      //No basis, no try
+      return []
+    }
+    var npoints = permute(points, ah)
+    var nhull   = ich(npoints, true)
+    return invPermute(nhull, ah)
+  }
+}
+},{"affine-hull":7,"incremental-convex-hull":14}],7:[function(require,module,exports){
 'use strict'
 
-module.exports = affineComplement
+module.exports = affineHull
 
 var orient = require('robust-orientation')
 
-function momentCurve(r, t, d) {
-  for(var i=0; i<d; ++i) {
-    r[i] = Math.pow(t, i+1)
+function linearlyIndependent(points, d) {
+  var nhull = new Array(d+1)
+  for(var i=0; i<points.length; ++i) {
+    nhull[i] = points[i]
   }
-  return r
+  for(var i=0; i<=points.length; ++i) {
+    for(var j=points.length; j<=d; ++j) {
+      var x = new Array(d)
+      for(var k=0; k<d; ++k) {
+        x[k] = Math.pow(j+1-i, k)
+      }
+      nhull[j] = x
+    }
+    var o = orient.apply(void 0, nhull)
+    if(o) {
+      return true
+    }
+  }
+  return false
 }
 
-function affineComplement(d, pts) {
-  var cod   = pts.length
-  if(cod === d+1) {
-    if(orient.apply(void 0, pts) === 0) {
-      return null
-    }
+function affineHull(points) {
+  var n = points.length
+  if(n === 0) {
     return []
-  } else if(cod > d+1) {
-    return null
   }
-  var frame = new Array(d+1)
-  var t = 1.0
-  for(var i=0; i<cod; ++i) {
-    frame[i] = pts[i]
+  if(n === 1) {
+    return [0]
   }
-  for(var i=cod; i<=d; ++i) {
-    frame[i] = momentCurve(new Array(d), t++, d)
-  }
-  var ptr = 0
-  for(var i=0; i<=d; ++i) {
-    var o = orient.apply(void 0, frame)
-    if(o !== 0) {
-      return frame.slice(cod)
+  var d = points[0].length
+  var frame = [ points[0] ]
+  var index = [ 0 ]
+  for(var i=1; i<n; ++i) {
+    frame.push(points[i])
+    if(!linearlyIndependent(frame, d)) {
+      frame.pop()
+      continue
     }
-    momentCurve(frame[ptr+cod], t++, d)
-    ptr = (ptr + 1) % (d+1-cod)
+    index.push(i)
+    if(index.length === d+1) {
+      return index
+    }
   }
-  return null
+  return index
 }
-},{"robust-orientation":10}],5:[function(require,module,exports){
+},{"robust-orientation":13}],8:[function(require,module,exports){
 "use strict"
 
 module.exports = fastTwoSum
@@ -200,7 +288,7 @@ function fastTwoSum(a, b, result) {
 	}
 	return [ar+br, x]
 }
-},{}],6:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict"
 
 var twoProduct = require("two-product")
@@ -251,7 +339,7 @@ function scaleLinearExpansion(e, scale) {
   g.length = count
   return g
 }
-},{"two-product":9,"two-sum":5}],7:[function(require,module,exports){
+},{"two-product":12,"two-sum":8}],10:[function(require,module,exports){
 "use strict"
 
 module.exports = robustSubtract
@@ -408,7 +496,7 @@ function robustSubtract(e, f) {
   g.length = count
   return g
 }
-},{}],8:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict"
 
 module.exports = linearExpansionSum
@@ -565,7 +653,7 @@ function linearExpansionSum(e, f) {
   g.length = count
   return g
 }
-},{}],9:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict"
 
 module.exports = twoProduct
@@ -599,7 +687,7 @@ function twoProduct(a, b, result) {
 
   return [ y, x ]
 }
-},{}],10:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict"
 
 var twoProduct = require("two-product")
@@ -790,205 +878,7 @@ function generateOrientationProc() {
 }
 
 generateOrientationProc()
-},{"robust-scale":6,"robust-subtract":7,"robust-sum":8,"two-product":9}],11:[function(require,module,exports){
-'use strict'
-
-module.exports = affineHull
-
-var orient = require('robust-orientation')
-
-function linearlyIndependent(points, d) {
-  var nhull = new Array(d+1)
-  for(var i=0; i<points.length; ++i) {
-    nhull[i] = points[i]
-  }
-  for(var i=0; i<=points.length; ++i) {
-    for(var j=points.length; j<=d; ++j) {
-      var x = new Array(d)
-      for(var k=0; k<d; ++k) {
-        x[k] = Math.pow(j+1-i, k)
-      }
-      nhull[j] = x
-    }
-    var o = orient.apply(void 0, nhull)
-    if(o) {
-      return true
-    }
-  }
-  return false
-}
-
-function affineHull(points) {
-  var n = points.length
-  if(n === 0) {
-    return []
-  }
-  if(n === 1) {
-    return [0]
-  }
-  var d = points[0].length
-  var frame = [ points[0] ]
-  var index = [ 0 ]
-  for(var i=1; i<n; ++i) {
-    frame.push(points[i])
-    if(!linearlyIndependent(frame, d)) {
-      frame.pop()
-      continue
-    }
-    index.push(i)
-    if(index.length === d+1) {
-      return index
-    }
-  }
-  return index
-}
-},{"robust-orientation":17}],12:[function(require,module,exports){
-arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],13:[function(require,module,exports){
-arguments[4][6][0].apply(exports,arguments)
-},{"dup":6,"two-product":16,"two-sum":12}],14:[function(require,module,exports){
-arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],15:[function(require,module,exports){
-arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],16:[function(require,module,exports){
-arguments[4][9][0].apply(exports,arguments)
-},{"dup":9}],17:[function(require,module,exports){
-arguments[4][10][0].apply(exports,arguments)
-},{"dup":10,"robust-scale":13,"robust-subtract":14,"robust-sum":15,"two-product":16}],18:[function(require,module,exports){
-"use strict"
-
-var convexHull1d = require('./lib/ch1d')
-var convexHull2d = require('./lib/ch2d')
-var convexHullnd = require('./lib/chnd')
-
-module.exports = convexHull
-
-function convexHull(points) {
-  var n = points.length
-  if(n === 0) {
-    return []
-  } else if(n === 1) {
-    return [[0]]
-  }
-  var d = points[0].length
-  if(d === 0) {
-    return []
-  } else if(d === 1) {
-    return convexHull1d(points)
-  } else if(d === 2) {
-    return convexHull2d(points)
-  }
-  return convexHullnd(points, d)
-}
-},{"./lib/ch1d":19,"./lib/ch2d":20,"./lib/chnd":21}],19:[function(require,module,exports){
-"use strict"
-
-module.exports = convexHull1d
-
-function convexHull1d(points) {
-  var lo = 0
-  var hi = 0
-  for(var i=1; i<points.length; ++i) {
-    if(points[i][0] < points[lo][0]) {
-      lo = i
-    }
-    if(points[i][0] > points[hi][0]) {
-      hi = i
-    }
-  }
-  if(lo < hi) {
-    return [[lo], [hi]]
-  } else if(lo > hi) {
-    return [[hi], [lo]]
-  } else {
-    return [[lo]]
-  }
-}
-},{}],20:[function(require,module,exports){
-'use strict'
-
-module.exports = convexHull2D
-
-var monotoneHull = require('monotone-convex-hull-2d')
-
-function convexHull2D(points) {
-  var hull = monotoneHull(points)
-  var h = hull.length
-  if(h <= 2) {
-    return []
-  }
-  var edges = new Array(h)
-  var a = hull[h-1]
-  for(var i=0; i<h; ++i) {
-    var b = hull[i]
-    edges[i] = [a,b]
-    a = b
-  }
-  return edges
-}
-
-},{"monotone-convex-hull-2d":29}],21:[function(require,module,exports){
-'use strict'
-
-module.exports = convexHullnD
-
-var ich = require('incremental-convex-hull')
-var aff = require('affine-hull')
-
-function permute(points, front) {
-  var n = points.length
-  var npoints = new Array(n)
-  for(var i=0; i<front.length; ++i) {
-    npoints[i] = points[front[i]]
-  }
-  var ptr = front.length
-  for(var i=0; i<n; ++i) {
-    if(front.indexOf(i) < 0) {
-      npoints[ptr++] = points[i]
-    }
-  }
-  return npoints
-}
-
-function invPermute(cells, front) {
-  var nc = cells.length
-  var nf = front.length
-  for(var i=0; i<nc; ++i) {
-    var c = cells[i]
-    for(var j=0; j<c.length; ++j) {
-      var x = c[j]
-      if(x < nf) {
-        c[j] = front[x]
-      } else {
-        x = x - nf
-        for(var k=0; k<nf; ++k) {
-          if(x >= front[k]) {
-            x += 1
-          }
-        }
-        c[j] = x
-      }
-    }
-  }
-  return cells
-}
-
-function convexHullnD(points, d) {
-  try {
-    return ich(points, true)
-  } catch(e) {
-    //If point set is degenerate, try to find a basis and rerun it
-    var ah = aff(points)
-    if(ah.length <= d) {
-      //No basis, no try
-      return []
-    }
-    var npoints = permute(points, ah)
-    var nhull   = ich(npoints, true)
-    return invPermute(nhull, ah)
-  }
-}
-},{"affine-hull":11,"incremental-convex-hull":22}],22:[function(require,module,exports){
+},{"robust-scale":9,"robust-subtract":10,"robust-sum":11,"two-product":12}],14:[function(require,module,exports){
 "use strict"
 
 //High level idea:
@@ -1435,113 +1325,19 @@ function incrementalConvexHull(points, randomSearch) {
   //Extract boundary cells
   return triangles.boundary()
 }
-},{"robust-orientation":28,"simplicial-complex":38}],23:[function(require,module,exports){
-arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],24:[function(require,module,exports){
-arguments[4][6][0].apply(exports,arguments)
-},{"dup":6,"two-product":27,"two-sum":23}],25:[function(require,module,exports){
-arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],26:[function(require,module,exports){
+},{"robust-orientation":20,"simplicial-complex":23}],15:[function(require,module,exports){
 arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],27:[function(require,module,exports){
+},{"dup":8}],16:[function(require,module,exports){
 arguments[4][9][0].apply(exports,arguments)
-},{"dup":9}],28:[function(require,module,exports){
+},{"dup":9,"two-product":19,"two-sum":15}],17:[function(require,module,exports){
 arguments[4][10][0].apply(exports,arguments)
-},{"dup":10,"robust-scale":24,"robust-subtract":25,"robust-sum":26,"two-product":27}],29:[function(require,module,exports){
-'use strict'
-
-module.exports = monotoneConvexHull2D
-
-var orient = require('robust-orientation')[3]
-
-function monotoneConvexHull2D(points) {
-  var n = points.length
-
-  if(n < 3) {
-    var result = new Array(n)
-    for(var i=0; i<n; ++i) {
-      result[i] = i
-    }
-
-    if(n === 2 &&
-       points[0][0] === points[1][0] &&
-       points[0][1] === points[1][1]) {
-      return [0]
-    }
-
-    return result
-  }
-
-  //Sort point indices along x-axis
-  var sorted = new Array(n)
-  for(var i=0; i<n; ++i) {
-    sorted[i] = i
-  }
-  sorted.sort(function(a,b) {
-    var d = points[a][0]-points[b][0]
-    if(d) {
-      return d
-    }
-    return points[a][1] - points[b][1]
-  })
-
-  //Construct upper and lower hulls
-  var lower = [sorted[0], sorted[1]]
-  var upper = [sorted[0], sorted[1]]
-
-  for(var i=2; i<n; ++i) {
-    var idx = sorted[i]
-    var p   = points[idx]
-
-    //Insert into lower list
-    var m = lower.length
-    while(m > 1 && orient(
-        points[lower[m-2]], 
-        points[lower[m-1]], 
-        p) <= 0) {
-      m -= 1
-      lower.pop()
-    }
-    lower.push(idx)
-
-    //Insert into upper list
-    m = upper.length
-    while(m > 1 && orient(
-        points[upper[m-2]], 
-        points[upper[m-1]], 
-        p) >= 0) {
-      m -= 1
-      upper.pop()
-    }
-    upper.push(idx)
-  }
-
-  //Merge lists together
-  var result = new Array(upper.length + lower.length - 2)
-  var ptr    = 0
-  for(var i=0, nl=lower.length; i<nl; ++i) {
-    result[ptr++] = lower[i]
-  }
-  for(var j=upper.length-2; j>0; --j) {
-    result[ptr++] = upper[j]
-  }
-
-  //Return result
-  return result
-}
-},{"robust-orientation":35}],30:[function(require,module,exports){
-arguments[4][5][0].apply(exports,arguments)
-},{"dup":5}],31:[function(require,module,exports){
-arguments[4][6][0].apply(exports,arguments)
-},{"dup":6,"two-product":34,"two-sum":30}],32:[function(require,module,exports){
-arguments[4][7][0].apply(exports,arguments)
-},{"dup":7}],33:[function(require,module,exports){
-arguments[4][8][0].apply(exports,arguments)
-},{"dup":8}],34:[function(require,module,exports){
-arguments[4][9][0].apply(exports,arguments)
-},{"dup":9}],35:[function(require,module,exports){
-arguments[4][10][0].apply(exports,arguments)
-},{"dup":10,"robust-scale":31,"robust-subtract":32,"robust-sum":33,"two-product":34}],36:[function(require,module,exports){
+},{"dup":10}],18:[function(require,module,exports){
+arguments[4][11][0].apply(exports,arguments)
+},{"dup":11}],19:[function(require,module,exports){
+arguments[4][12][0].apply(exports,arguments)
+},{"dup":12}],20:[function(require,module,exports){
+arguments[4][13][0].apply(exports,arguments)
+},{"dup":13,"robust-scale":16,"robust-subtract":17,"robust-sum":18,"two-product":19}],21:[function(require,module,exports){
 /**
  * Bit twiddling hacks for JavaScript.
  *
@@ -1747,7 +1543,7 @@ exports.nextCombination = function(v) {
 }
 
 
-},{}],37:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict"; "use restrict";
 
 module.exports = UnionFind;
@@ -1810,7 +1606,7 @@ proto.link = function(x, y) {
     ++ranks[xr];
   }
 }
-},{}],38:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict"; "use restrict";
 
 var bits      = require("bit-twiddle")
@@ -2154,7 +1950,101 @@ function connectedComponents(cells, vertex_count) {
 }
 exports.connectedComponents = connectedComponents
 
-},{"bit-twiddle":36,"union-find":37}],39:[function(require,module,exports){
+},{"bit-twiddle":21,"union-find":22}],24:[function(require,module,exports){
+'use strict'
+
+module.exports = monotoneConvexHull2D
+
+var orient = require('robust-orientation')[3]
+
+function monotoneConvexHull2D(points) {
+  var n = points.length
+
+  if(n < 3) {
+    var result = new Array(n)
+    for(var i=0; i<n; ++i) {
+      result[i] = i
+    }
+
+    if(n === 2 &&
+       points[0][0] === points[1][0] &&
+       points[0][1] === points[1][1]) {
+      return [0]
+    }
+
+    return result
+  }
+
+  //Sort point indices along x-axis
+  var sorted = new Array(n)
+  for(var i=0; i<n; ++i) {
+    sorted[i] = i
+  }
+  sorted.sort(function(a,b) {
+    var d = points[a][0]-points[b][0]
+    if(d) {
+      return d
+    }
+    return points[a][1] - points[b][1]
+  })
+
+  //Construct upper and lower hulls
+  var lower = [sorted[0], sorted[1]]
+  var upper = [sorted[0], sorted[1]]
+
+  for(var i=2; i<n; ++i) {
+    var idx = sorted[i]
+    var p   = points[idx]
+
+    //Insert into lower list
+    var m = lower.length
+    while(m > 1 && orient(
+        points[lower[m-2]], 
+        points[lower[m-1]], 
+        p) <= 0) {
+      m -= 1
+      lower.pop()
+    }
+    lower.push(idx)
+
+    //Insert into upper list
+    m = upper.length
+    while(m > 1 && orient(
+        points[upper[m-2]], 
+        points[upper[m-1]], 
+        p) >= 0) {
+      m -= 1
+      upper.pop()
+    }
+    upper.push(idx)
+  }
+
+  //Merge lists together
+  var result = new Array(upper.length + lower.length - 2)
+  var ptr    = 0
+  for(var i=0, nl=lower.length; i<nl; ++i) {
+    result[ptr++] = lower[i]
+  }
+  for(var j=upper.length-2; j>0; --j) {
+    result[ptr++] = upper[j]
+  }
+
+  //Return result
+  return result
+}
+},{"robust-orientation":30}],25:[function(require,module,exports){
+arguments[4][8][0].apply(exports,arguments)
+},{"dup":8}],26:[function(require,module,exports){
+arguments[4][9][0].apply(exports,arguments)
+},{"dup":9,"two-product":29,"two-sum":25}],27:[function(require,module,exports){
+arguments[4][10][0].apply(exports,arguments)
+},{"dup":10}],28:[function(require,module,exports){
+arguments[4][11][0].apply(exports,arguments)
+},{"dup":11}],29:[function(require,module,exports){
+arguments[4][12][0].apply(exports,arguments)
+},{"dup":12}],30:[function(require,module,exports){
+arguments[4][13][0].apply(exports,arguments)
+},{"dup":13,"robust-scale":26,"robust-subtract":27,"robust-sum":28,"two-product":29}],31:[function(require,module,exports){
 'use strict'
 
 module.exports = mouseListen
@@ -2363,7 +2253,7 @@ function mouseListen(element, callback) {
   return result
 }
 
-},{"mouse-event":40}],40:[function(require,module,exports){
+},{"mouse-event":32}],32:[function(require,module,exports){
 'use strict'
 
 function mouseButtons(ev) {
@@ -2425,7 +2315,7 @@ function mouseRelativeY(ev) {
 }
 exports.y = mouseRelativeY
 
-},{}],41:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 (function (global){
 module.exports =
   global.performance &&
@@ -2436,7 +2326,7 @@ module.exports =
   }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],42:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 'use strict'
 
 var wdt = require('../weighted-delaunay')
@@ -2449,6 +2339,14 @@ document.body.appendChild(canvas)
 window.addEventListener('resize', fit(canvas), false)
 var context = canvas.getContext('2d')
 
+var controlDiv = document.createElement('div')
+controlDiv.innerHTML = 'click to add points, hold to increase weight<br>tap a point to delete it<br>drag points to move them<br>highlight to see weight<br><a href="https://github.com/mikolalysenko/weighted-delaunay">Project page</a>'
+controlDiv.style.position = 'absolute'
+controlDiv.style['z-index'] = '10'
+controlDiv.style.left = controlDiv.style.top = '10px'
+document.body.appendChild(controlDiv)
+
+
 var DELETE_TIME = 300
 
 var points  = []
@@ -2458,7 +2356,7 @@ var cells   = []
 
 for(var i=0; i<10; ++i) {
   points.push([Math.random(), Math.random()])
-  weights.push(Math.random())
+  weights.push(0.5*Math.random())
 }
 
 function dataChanged() {
@@ -2471,7 +2369,7 @@ function findClosest(p) {
   for(var i=0; i<points.length; ++i) {
     var q = points[i]
     var d2 = Math.sqrt(Math.pow(p[0]-q[0],2) + Math.pow(p[1]-q[1],2))
-    if(d2 < 0.01 * weights[i]) {
+    if(d2 < 0.1 * weights[i]) {
       return i
     }
   }
@@ -2479,7 +2377,7 @@ function findClosest(p) {
 }
 
 function computeWeight(holdTime) {
-  return 5.0 / (1.0 + Math.exp(2.0 - 0.001 * holdTime))
+  return 2.0 / (1.0 + Math.exp(2.0 - 0.001 * holdTime))
 }
 
 var lastButtons = 0
@@ -2521,6 +2419,7 @@ mouseChange(function(buttons, x, y) {
         }
       }
       mode = ''
+      selectedPoint = -1
     }
     dataChanged()
   } else {
@@ -2552,7 +2451,7 @@ function circle(p, w) {
   var sp = pt2scr(p)
   var s = Math.min(canvas.width, canvas.height)
   context.beginPath()
-  context.arc(sp[0], sp[1], 0.01 * w * s, 0, 2.0*Math.PI)
+  context.arc(sp[0], sp[1], 0.1 * w * s, 0, 2.0*Math.PI)
   context.fill()
 }
 
@@ -2585,18 +2484,24 @@ function draw() {
   for(var i=0; i<points.length; ++i) {
     if(i === selectedPoint) {
       context.fillStyle = '#0f0'
+      circle(points[i], weights[i])
+
+      if(mode === '') {
+        context.fillStyle = 'rgba(0,255,0,0.25)'
+        circle(points[i], 10*weights[i])
+      }
     } else {
       context.fillStyle = '#000'
+      circle(points[i], weights[i])
     }
-    circle(points[i], weights[i])
   }
 }
 draw()
 
-},{"../weighted-delaunay":43,"canvas-fit":1,"mouse-change":39,"right-now":41}],43:[function(require,module,exports){
+},{"../weighted-delaunay":35,"canvas-fit":1,"mouse-change":31,"right-now":33}],35:[function(require,module,exports){
 'use strict'
 
-var ch = require('full-convex-hull')
+var ch = require('convex-hull')
 
 module.exports = weightedDelaunay
 
@@ -2614,7 +2519,7 @@ function weightedDelaunay(points, weights, useInfinity) {
       lift[j] = p[j]
       w += Math.pow(p[j], 2)
     }
-    lift[p.length] = w - weights[i]
+    lift[p.length] = w - weights[i] * weights[i]
     lifted[i] = lift
   }
   var pointAtInfinity = new Array(d+1)
@@ -2646,6 +2551,6 @@ function weightedDelaunay(points, weights, useInfinity) {
   return cells
 }
 
-},{"full-convex-hull":3}]},{},[42]);
+},{"convex-hull":3}]},{},[34]);
 </script>
 </html>
