@@ -1,6 +1,6 @@
 'use strict'
 
-var ch = require('full-convex-hull')
+var ch = require('convex-hull')
 
 module.exports = weightedDelaunay
 
