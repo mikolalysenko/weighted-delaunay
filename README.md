@@ -1,11 +1,15 @@
-weighted-delaunay-triangulate
-=============================
-Constructs the weighted Delaunay triangulation of a set of points.
+weighted-delaunay
+=================
+Constructs the weighted Delaunay triangulation of a set of points.  This is equivalent to constructing a Delaunay triangulation of a set of spheres whose radii are the same as the weights for each point.
+
+# [Demo](https://mikolalysenko.github.io/weighted-delaunay)
+
+[<img src="img/demo.png">](https://mikolalysenko.github.io/weighted-delaunay)
 
 # Example
 
 ```javascript
-var wdt = require('weighted-delaunay-triangulate')
+var wdt = require('weighted-delaunay')
 
 var points  = new Array(10)
 var weights = new Array(10)
@@ -35,12 +39,12 @@ Example output:
 # Install
 
 ```
-npm i weighted-delaunay-triangulate
+npm i weighted-delaunay
 ```
 
 # API
 
-#### `require('weighted-delaunay-triangulate')(points, cells[, pointAtInfinity])`
+#### `require('weighted-delaunay')(points, cells[, pointAtInfinity])`
 Constructs a weighted Delaunay triangulation.
 
 * `points` - the points of the weighted delaunay triangulation

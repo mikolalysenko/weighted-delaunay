@@ -10,6 +10,14 @@ document.body.appendChild(canvas)
 window.addEventListener('resize', fit(canvas), false)
 var context = canvas.getContext('2d')
 
+var controlDiv = document.createElement('div')
+controlDiv.innerHTML = 'click to add points, hold to increase weight<br>tap a point to delete it<br>drag points to move them<br>highlight to see weight<br><a href="https://github.com/mikolalysenko/weighted-delaunay">Project page</a>'
+controlDiv.style.position = 'absolute'
+controlDiv.style['z-index'] = '10'
+controlDiv.style.left = controlDiv.style.top = '10px'
+document.body.appendChild(controlDiv)
+
+
 var DELETE_TIME = 300
 
 var points  = []
@@ -19,7 +27,7 @@ var cells   = []
 
 for(var i=0; i<10; ++i) {
   points.push([Math.random(), Math.random()])
-  weights.push(Math.random())
+  weights.push(0.5*Math.random())
 }
 
 function dataChanged() {
@@ -32,7 +40,7 @@ function findClosest(p) {
   for(var i=0; i<points.length; ++i) {
     var q = points[i]
     var d2 = Math.sqrt(Math.pow(p[0]-q[0],2) + Math.pow(p[1]-q[1],2))
-    if(d2 < 0.01 * weights[i]) {
+    if(d2 < 0.1 * weights[i]) {
       return i
     }
   }
@@ -40,7 +48,7 @@ function findClosest(p) {
 }
 
 function computeWeight(holdTime) {
-  return 5.0 / (1.0 + Math.exp(2.0 - 0.001 * holdTime))
+  return 2.0 / (1.0 + Math.exp(2.0 - 0.001 * holdTime))
 }
 
 var lastButtons = 0
@@ -82,6 +90,7 @@ mouseChange(function(buttons, x, y) {
         }
       }
       mode = ''
+      selectedPoint = -1
     }
     dataChanged()
   } else {
@@ -113,7 +122,7 @@ function circle(p, w) {
   var sp = pt2scr(p)
   var s = Math.min(canvas.width, canvas.height)
   context.beginPath()
-  context.arc(sp[0], sp[1], 0.01 * w * s, 0, 2.0*Math.PI)
+  context.arc(sp[0], sp[1], 0.1 * w * s, 0, 2.0*Math.PI)
   context.fill()
 }
 
@@ -146,10 +155,16 @@ function draw() {
   for(var i=0; i<points.length; ++i) {
     if(i === selectedPoint) {
       context.fillStyle = '#0f0'
+      circle(points[i], weights[i])
+
+      if(mode === '') {
+        context.fillStyle = 'rgba(0,255,0,0.25)'
+        circle(points[i], 10*weights[i])
+      }
     } else {
       context.fillStyle = '#000'
+      circle(points[i], weights[i])
     }
-    circle(points[i], weights[i])
   }
 }
 draw()
